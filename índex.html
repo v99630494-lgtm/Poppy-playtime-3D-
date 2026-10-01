@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=none">
+    <title>Poppy Playtime: Be Huggy Wuggy 3D</title>
+    <style>
+        body {
+            margin: 0; padding: 0; overflow: hidden;
+            background-color: #020208; font-family: 'Courier New', Courier, monospace;
+        }
+        #game-container {
+            position: relative; width: 100vw; height: 100vh;
+        }
+        canvas {
+            width: 100%; height: 100%; display: block;
+        }
+        /* HUD Superior */
+        #hud {
+            position: absolute; top: 20px; left: 20px;
+            color: #ff3333; font-size: 18px; font-weight: bold;
+            text-shadow: 0 0 8px rgba(255, 51, 51, 0.6);
+            pointer-events: none;
+        }
+        /* Mãos do Huggy Wuggy em primeira pessoa */
+        #huggy-hands {
+            position: absolute; bottom: 0; left: 50%;
+            transform: translateX(-50%); width: 100%; max-width: 600px;
+            height: 250px; pointer-events: none; display: flex;
+            justify-content: space-between; padding: 0 40px; box-sizing: border-box;
+        }
+        .hand {
+            width: 120px; height: 100%;
+            background: linear-gradient(to top, #ffcc00 20%, #1a3c80 60%);
+            border-radius: 40px 40px 10px 10px;
+            box-shadow: inset 0 0 20px #000, 0 10px 20px rgba(0,0,0,0.8);
+            border: 3px solid #112a5e;
+            position: relative;
+            animation: breathe 3s infinite alternate ease-in-out;
+        }
+        .hand-left { transform: rotate(15deg); animation-delay: 0s; }
+        .hand-right { transform: rotate(-15deg); animation-delay: 1.5s; }
+        
+        /* Garras Amarelas do Huggy */
+        .hand::before {
+            content: ''; position: absolute; top: -15px; left: 20px;
+            width: 80px; height: 30px; background: #ffcc00;
+            border-radius: 20px 20px 0 0; box-shadow: inset 0 5px 5px rgba(0,0,0,0.3);
+        }
+
+        @keyframes breathe {
+            0% { transform: translateY(10px) rotate(15deg); }
+            100% { transform: translateY(-10px) rotate(12deg); }
+        }
+        @keyframes breathe-right {
+            0% { transform: translateY(10px) rotate(-15deg); }
+            100% { transform: translateY(-10px) rotate(-12deg); }
+        }
+
+        /* Legendas da Atmosfera de Terror */
+        #subtitles {
+            position: absolute; bottom: 140px; left: 50%;
+            transform: translateX(-50%); color: #fff; font-size: 16px;
+            background: rgba(0, 0, 0, 0.75); padding: 8px 20px;
+            border-radius: 4px; pointer-events: none; text-align: center;
+            border: 1px solid #ff3333; letter-spacing: 1px;
+        }
+
+        /* Controles Virtuais para Celular */
+        #mobile-controls {
+            position: absolute; bottom: 20px; right: 20px;
+            display: grid; grid-template-columns: repeat(3, 55px);
+            grid-template-rows: repeat(2, 55px); gap: 8px; z-index: 20;
+        }
+        .btn-ctrl {
+            background: rgba(10, 15, 30, 0.7); border: 2px solid #ff3333;
+            color: #ff3333; border-radius: 50%; font-size: 22px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; box-shadow: 0 0 10px rgba(255,51,51,0.3);
+        }
+        .btn-ctrl:active { background: rgba(255, 51, 51, 0.4); color: white; }
+
+        /* Tela de Jumpscare / Vitória */
+        #victory-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 30; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; color: white;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+        }
+        #victory-screen.active { opacity: 1; pointer-events: auto; }
+        h1 { color: #ff3333; font-size: 45px; text-shadow: 0 0 20px #ff0000; margin-bottom: 5px; text-align: center; }
+        .btn-restart {
+            background: #ff3333; border: none; color: white; padding: 12px 35px;
+            font-size: 18px; font-weight: bold; border-radius: 4px; cursor: pointer;
+            box-shadow: 0 0 15px #ff3333; margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="factoryCanvas"></canvas>
+        
+        <div id="hud">OBJETIVO: INADEQUADO ENCONTRAR O HUMANO NA SALA 2</div>
+        <div id="subtitles">Estou ouvindo os passos dele... Sala 2 fica à frente.</div>
+
+        <!-- Visão das Mãos do Huggy Wuggy -->
+        <div id="huggy-hands">
+            <div class="hand hand-left"></div>
+            <div class="hand hand-right" style="animation-name: breathe-right;"></div>
+        </div>
+
+        <!-- Controles para Dispositivos Móveis -->
+        <div id="mobile-controls">
+            <div></div><div class="btn-ctrl" id="m-up">▲</div><div></div>
+            <div class="btn-ctrl" id="m-left">◀</div><div class="btn-ctrl" id="m-down">▼</div><div class="btn-ctrl" id="m-right">▶</div>
+        </div>
+    </div>
+
+    <!-- Tela de Captura Final -->
+    <div id="victory-screen">
+        <h1>VOCÊ PEGOU ELE!</h1>
+        <p style="font-size: 18px; color: #aaa;">O intruso não conseguiu escapar do abraço do Huggy Wuggy.</p>
+        <button class="btn-restart" onclick="restartGame()">CAÇAR NOVAMENTE</button>
+    </div>
+
+<script>
+    const canvas = document.getElementById("factoryCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Configurações do Huggy Wuggy (Jogador)
+    let huggy = { x: 2.5, y: 2.5, angle: 0 };
+    const mapSize = 16;
+    let isVictory = false;
+
+    // Mapa Detalhado da Fábrica Abandonada (Sala Inicial, Corredores e a "Sala 2")
+    // 1 = Parede de Tijolo Azul Escuro (Playtime Co.), 2 = Portas de Metal, 3 = Brinquedos/Pilhas, 4 = Parede Amarela da Sala 2
+    let map = [
+        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+        1,0,0,0,0,0,1,1,1,0,0,0,0,0,0,1,
+        1,0,1,1,1,0,0,2,0,0,1,1,1,1,0,1,
+        1,0,1,3,1,1,0,1,1,0,1,0,0,1,0,1,
+        1,0,0,0,0,1,0,1,1,0,0,0,0,1,0,1,
+        1,1,1,0,0,1,0,1,1,1,1,2,1,1,0,1,
+        1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+        1,0,1,1,1,1,1,0,1,1,1,1,1,1,0,1,
+        1,0,1,0,0,0,1,0,1,0,0,0,0,1,0,1,
+        1,0,2,0,4,0,2,0,2,0,4,4,0,2,0,1,
+        1,0,1,0,4,0,1,0,1,0,4,0,0,1,0,1,
+        1,0,1,1,4,1,1,0,1,1,4,1,1,1,0,1,
+        // Área Inferior Direita: A Famosa SALA 2 (Protegida por paredes amarelas industriais)
+        1,0,0,0,0,0,0,0,0,0,4,0,0,0,0,1,
+        1,1,1,1,1,1,1,0,1,1,4,0,0,0,0,1,
+        1,1,1,1,1,1,1,0,1,1,4,4,4,4,4,1,
+        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+    ];
+
+    // Posição Física do Humano (O Player do Poppy Playtime) escondido na Sala 2
+    let humanPlayer = { x: 13.5, y: 13.5 };
+
+    // Teclado Controles PC
+    let keys = { w: false, s: false, a: false, d: false };
+    document.addEventListener("keydown", e => {
+        if(e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = true;
+    });
+    document.addEventListener("keyup", e => {
+        if(e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = false;
+    });
+
+    // Câmera arrastável no mouse para PC
+    let isMouseDown = false;
+    canvas.addEventListener("mousedown", () => isMouseDown = true);
+    window.addEventListener("mouseup", () => isMouseDown = false);
+    canvas.addEventListener("mousemove", e => {
+        if (isMouseDown && !isVictory) {
+            huggy.angle += e.movementX * 0.006;
+        }
+    });
+
+    // Suporte aos botões Touch do Celular
+    setupMobileButton("m-up", "w");
+    setupMobileButton("m-down", "s");
+    setupMobileButton("m-left", "a");
+    setupMobileButton("m-right", "d");
+
+    function setupMobileButton(id, key) {
+        const btn = document.getElementById(id);
+        btn.addEventListener("touchstart", (e) => { e.preventDefault(); keys[key] = true; });
+        btn.addEventListener("touchend", () => keys[key] = false);
+    }
+
+    // Dinâmica de Atmosfera e Avisos de Legendas por Proximidade
+    function updateSubtitle(dist) {
+        const sub = document.getElementById("subtitles");
+        if (dist > 12) {
+            sub.innerText = "Sinto o cheiro dele na fábrica... Ele deve estar na Sala 2.";
+            sub.style.color = "#fff";
+        } else if (dist <= 12 && dist > 5) {
+            sub.innerText = "Ele está perto! Consigo ouvir o barulho do GrabPack dele!";
+            sub.style.color = "#ffaa00";
+        } else if (dist <= 5) {
+            sub.innerText = "ELE ESTÁ BEM NA MINHA FRENTE! PEGUE-O!";
+            sub.style.color = "#ff3333";
+        }
+    }
+
+    // Atualização de Movimentação e Física do Huggy
+    function update() {
+        if (isVictory) return;
+
+        let moveSpeed = 0.05; // Huggy Wuggy corre rápido
+        let rotSpeed = 0.04;
+
+        if (keys.a) huggy.angle -= rotSpeed;
+        if (keys.d) huggy.angle += rotSpeed;
+
+        let newX = huggy.x;
+        let newY = huggy.y;
+
+        if (keys.w) {
+            newX += Math.cos(huggy.angle) * moveSpeed;
+            newY += Math.sin(huggy.angle) * moveSpeed;
+        }
+        if (keys.s) {
+            newX -= Math.cos(huggy.angle) * moveSpeed;
+            newY -= Math.sin(huggy.angle) * moveSpeed;
+        }
+
+        // Colisões nas paredes da Playtime Co.
+        if (map[Math.floor(huggy.y) * mapSize + Math.floor(newX)] === 0) huggy.x = newX;
+        if (map[Math.floor(newY) * mapSize + Math.floor(huggy.x)] === 0) huggy.y = newY;
+
+        // Calcular distância até o humano
+        let dx = humanPlayer.x - huggy.x;
+        let dy = humanPlayer.y - huggy.y;
+        let distanceToHuman = Math.sqrt(dx*dx + dy*dy);
+
+        updateSubtitle(distanceToHuman);
+
